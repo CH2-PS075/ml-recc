@@ -9,6 +9,7 @@ Original file is located at
 
 import pandas as pd
 import numpy as np
+import pickle as pkl
 
 class Similarity:
 
@@ -99,7 +100,7 @@ def fetch_db(host, user, password, database):
     cursor = mydb.cursor()
 
     query = '''SELECT `talentName`, `email`, `latitude`, `longitude`,
-              `price`, `category`, `quantity` from tb_talents'''
+              `price`, `categoryId`, `quantity` from tb_talents'''
 
     query_long = '''SELECT max(`talentId`) from tb_talents'''
 
@@ -117,17 +118,6 @@ def json_result(fetch_result, vector):
     quantity = {"single":0,
             "duo":1,
             "group":2}
-    category = {
-        "Klasik":0,
-        "Jazz":1,
-        "Akustik":2,
-        "Pop":3,
-        "Hip Hop":4,
-        "R&B":5,
-        "Rock":6,
-        "Religi":7,
-        "Dangdut":8
-    }
 
     df = {'name':np.array([]),
         'email':np.array([]),
@@ -139,13 +129,13 @@ def json_result(fetch_result, vector):
 
     for i in fetch_result:
 
-        (name, email, latitude, longitude, price, cat, qty) = i
+        (name, email, latitude, longitude, price, category, qty) = i
         df['name'] = np.append(df['name'], name)
         df['email'] = np.append(df['email'], email)
         df['latitude'] = np.append(df['latitude'], latitude)
         df['longitude'] = np.append(df['longitude'], longitude)
         df['price'] = np.append(df['price'], price)
-        df['category'] = np.append(df['category'], category[cat])
+        df['category'] = np.append(df['category'], category)
         df['quantity'] = np.append(df['quantity'], quantity[qty])
 
     df = pd.DataFrame(df)
@@ -157,8 +147,6 @@ def json_result(fetch_result, vector):
 
     result = recc.find_recommendation(10).reset_index()
     result = df[df.columns[:2]].reset_index().merge(result, on='index').drop(columns=['index'])
-    result['category'] = result['category'].replace(dict((v, k) for k, v in category.items()))
-    result['quantity'] = result['quantity'].replace(dict((v, k) for k, v in quantity.items()))
     result = result.to_json()
 
     return result
@@ -170,6 +158,7 @@ from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'static/uploads/'
+app.config['RESPONSE'] = 'response.json'
 
 host="localhost"
 user="root"
@@ -194,26 +183,12 @@ def prediction_route():
     if request.method == "POST":
 
         json = request.json
-        quantity = {"single":0,
-            "duo":1,
-            "group":2}
-        category = {
-            "Klasik":0,
-            "Jazz":1,
-            "Akustik":2,
-            "Pop":3,
-            "Hip Hop":4,
-            "R&B":5,
-            "Rock":6,
-            "Religi":7,
-            "Dangdut":8
-        }
         if json is not None:
             vector = np.array([json['latitude'],
                            json['longitude'],
                            json['price'],
-                           category[json['category']],
-                           quantity[json['quantity']],])
+                           json['category'],
+                           json['quantity'],])
             json_vector = json_data(result, vector)
 
             return jsonify({
@@ -243,7 +218,7 @@ def prediction_route():
         }), 405
 
 
-if __name__ == "__main__":
+if __name__ == "main":
     app.run(debug=True,
             host="0.0.0.0",
             port=int(os.environ.get("PORT", 8080)))
